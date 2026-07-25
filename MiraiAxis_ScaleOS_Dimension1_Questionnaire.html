@@ -246,9 +246,16 @@ body{
 
     <div id="accordionContainer"></div>
 
+    <!-- Incomplete Items Checker -->
+    <div id="incompleteCard" style="display:none; background:#fff3cd; border:1px solid #ffc107; border-radius:8px; padding:16px; margin-bottom:20px; border-left:4px solid #ffc107;">
+      <div style="font-weight:700; color:#c9700e; margin-bottom:10px; font-size:14px;">⚠️ Incomplete Items</div>
+      <div id="incompleteList" style="font-size:13px; color:#333; line-height:1.8;"></div>
+    </div>
+
     <div class="submit-wrap">
       <button id="submitBtn" disabled onclick="submitAssessment()">Submit Assessment</button>
       <div class="submit-note">Submit is enabled once your details, all 33 questions, and evidence for each question are complete.</div>
+      <button id="debugBtn" style="background:#6c757d; color:#fff; border:none; padding:8px 16px; border-radius:4px; font-size:12px; cursor:pointer; margin-top:8px;">🔍 Show What's Missing</button>
     </div>
   </div>
 </div>
@@ -522,6 +529,7 @@ function toggleNoEvidence(ci, qi){
   document.getElementById(`evform_${ci}_${qi}`).style.display = isChecked ? 'none' : 'grid';
   document.getElementById(`notes_${ci}_${qi}`).style.display = isChecked ? 'none' : 'block';
   document.getElementById(`evbtn_${ci}_${qi}`).style.display = isChecked ? 'none' : 'block';
+  showIncompleteItems();
   checkFormComplete();
 }
 
@@ -582,6 +590,7 @@ function renderEvidenceList(ci, qi){
   `).join('');
   
   updateEvidenceCounter(ci, qi);
+  showIncompleteItems();
   checkFormComplete();
 }
 
@@ -589,6 +598,8 @@ function removeEvidence(ci, qi, idx){
   const key = `${ci}_${qi}`;
   if(answers[key]) answers[key].evidenceItems.splice(idx, 1);
   renderEvidenceList(ci, qi);
+  showIncompleteItems();
+  checkFormComplete();
 }
 
 function updateEvidenceCounter(ci, qi){
@@ -615,6 +626,54 @@ function updateProgress(){
   checkFormComplete();
 }
 
+function showIncompleteItems(){
+  const requiredFields = [
+    {id: 'f_company', label: 'Company Name'},
+    {id: 'f_name', label: 'Your Name'},
+    {id: 'f_email', label: 'Email'},
+    {id: 'f_role', label: 'Role / Designation'},
+    {id: 'f_department', label: 'Department'},
+    {id: 'f_industry', label: 'Type of Industry'},
+    {id: 'f_revenue', label: 'Annual Revenue'}
+  ];
+  
+  const incompleteItems = [];
+  
+  // Check required fields
+  requiredFields.forEach(field => {
+    if(document.getElementById(field.id).value.trim() === ''){
+      incompleteItems.push(`📝 <strong>${field.label}</strong> — Required field is empty`);
+    }
+  });
+  
+  // Check evidence for each question
+  const missingEvidenceQuestions = [];
+  capabilities.forEach((cap, ci)=> {
+    cap.questions.forEach((q, qi)=>{
+      const ans = answers[`${ci}_${qi}`];
+      if(ans && ans.score){
+        if(!(ans.noEvidence === true || (ans.evidenceItems && ans.evidenceItems.length > 0))){
+          missingEvidenceQuestions.push(`${cap.code}-Q${qi+1} (${cap.name})`);
+        }
+      }
+    });
+  });
+  
+  if(missingEvidenceQuestions.length > 0){
+    incompleteItems.push(`📋 <strong>${missingEvidenceQuestions.length} Question(s) Missing Evidence:</strong><br><div style="margin-left:16px; margin-top:6px;">${missingEvidenceQuestions.map(q=>`• ${q}`).join('<br>')}</div>`);
+  }
+  
+  const incompleteCard = document.getElementById('incompleteCard');
+  const incompleteList = document.getElementById('incompleteList');
+  
+  if(incompleteItems.length > 0){
+    incompleteCard.style.display = 'block';
+    incompleteList.innerHTML = incompleteItems.join('<br>');
+  } else {
+    incompleteCard.style.display = 'none';
+  }
+}
+
 function checkFormComplete(){
   const requiredFields = ['f_company','f_name','f_email','f_role','f_department','f_industry','f_revenue'];
   const fieldsOk = requiredFields.every(id => document.getElementById(id).value.trim() !== '');
@@ -635,6 +694,9 @@ function checkFormComplete(){
   const allEvidenceProvided = evidenceComplete === totalQuestions;
   
   document.getElementById('submitBtn').disabled = !(fieldsOk && allAnswered && allEvidenceProvided);
+  
+  // Show incomplete items
+  showIncompleteItems();
 }
 
 ['f_company','f_name','f_email','f_role','f_department','f_industry','f_revenue'].forEach(id=>{
@@ -642,7 +704,35 @@ function checkFormComplete(){
   document.getElementById(id).addEventListener('change', checkFormComplete);
 });
 
+// Debug button
+document.getElementById('debugBtn').addEventListener('click', function(){
+  showIncompleteItems();
+  document.getElementById('incompleteCard').style.display = 'block';
+  setTimeout(()=>{
+    document.getElementById('incompleteCard').scrollIntoView({behavior:'smooth', block:'center'});
+  }, 100);
+  
+  // Also log to console for debugging
+  const requiredFields = ['f_company','f_name','f_email','f_role','f_department','f_industry','f_revenue'];
+  console.log('=== FORM DEBUG INFO ===');
+  requiredFields.forEach(id => {
+    const val = document.getElementById(id).value;
+    console.log(`${id}: "${val}" ${val.trim() === '' ? '❌ EMPTY' : '✓'}`);
+  });
+  
+  let answered = 0, hasEvidence = 0;
+  capabilities.forEach((cap, ci)=> cap.questions.forEach((q, qi)=>{
+    const ans = answers[`${ci}_${qi}`];
+    if(ans && ans.score) answered++;
+    if(ans && (ans.noEvidence === true || (ans.evidenceItems && ans.evidenceItems.length > 0))) hasEvidence++;
+  }));
+  console.log(`Questions answered: ${answered}/33`);
+  console.log(`Questions with evidence: ${hasEvidence}/33`);
+  console.log(`Submit enabled: ${!document.getElementById('submitBtn').disabled}`);
+});
+
 buildAccordion();
+checkFormComplete(); // Initial check when page loads
 
 // ---------------- Scoring & report generation ----------------
 function computeScores(){
