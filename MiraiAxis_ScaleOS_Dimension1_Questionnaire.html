@@ -136,11 +136,14 @@ body{
 .evidence-label{
   font-size:11px; font-weight:700; color:#888; letter-spacing:.5px; margin-bottom:5px;
 }
-.evidence-textarea{
-  width:100%; min-height:56px; padding:9px 10px; border:1px solid #ccc; border-radius:6px;
-  font-size:13.5px; font-family:inherit; resize:vertical;
-}
-.evidence-textarea::placeholder{font-style:italic; color:#999;}
+.evidence-section{background:#f5f7fb; padding:12px; border-radius:6px; border-left:3px solid var(--gold); margin-top:8px;}
+.evidence-header{font-size:12px; font-weight:700; color:var(--navy); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;}
+.evidence-badge{background:var(--gold); color:var(--navy); padding:2px 10px; border-radius:6px; font-size:11px; font-weight:700; min-width:18px; text-align:center;}
+.evidence-badge.incomplete{background:#ddd; color:#888;}
+.evidence-row{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;}
+.evidence-row.single{grid-template-columns:1fr;}
+.evidence-col label{font-size:11px; font-weight:700; color:var(--navy); margin-bottom:4px; display:block;}
+.evidence-col select{padding:8px; border:1px solid #d9dce3; border-radius:4px; font-size:12px; width:100%; background:#fff;}
 
 .submit-wrap{text-align:center; margin-top:20px;}
 #submitBtn{
@@ -149,6 +152,9 @@ body{
 }
 #submitBtn:disabled{background:#ddd; color:#999; cursor:not-allowed;}
 .submit-note{font-size:12.5px; color:#888; margin-top:10px;}
+.pending-panel{margin-top:20px; padding:16px; background:#FFF3CD; border:1px solid #FFE69C; border-radius:8px; text-align:left; display:none;}
+.pending-panel .pending-title{font-weight:700; color:#856404; margin-bottom:10px; font-size:14px;}
+.pending-panel .pending-list{font-size:13px; color:#856404; line-height:1.7;}
 
 /* thank you screen */
 #thankyou{display:none; text-align:center; padding:90px 20px;}
@@ -196,7 +202,7 @@ body{
     <div class="card intro-text">
       <p>Every growing company eventually discovers that ambition needs a foundation, and that foundation is leadership. This assessment looks honestly at whether your organization has a clear purpose, a real strategy, disciplined governance, and the leadership depth to make good decisions consistently, or whether growth so far has depended on a few individuals holding it all together.</p>
       <p>What gets measured gets managed. The value of this assessment comes entirely from the honesty of your answers. A score that looks good but isn't true helps no one, least of all your own leadership team trying to make real decisions about where to invest next.</p>
-      <p>Please answer every question as accurately as you can, and use the evidence field under each question to note what actually backs up your score, a document, a system, a person who can confirm it. This assessment takes about 30 to 40 minutes to complete.</p>
+      <p>Please answer every question as accurately as you can. For each question, select a score and identify the category and strength of evidence that supports it, a document, a live system, an audit, or a certification. This assessment takes about 30 to 40 minutes to complete.</p>
     </div>
 
     <div class="card legend-card">
@@ -246,16 +252,13 @@ body{
 
     <div id="accordionContainer"></div>
 
-    <!-- Incomplete Items Checker -->
-    <div id="incompleteCard" style="display:none; background:#fff3cd; border:1px solid #ffc107; border-radius:8px; padding:16px; margin-bottom:20px; border-left:4px solid #ffc107;">
-      <div style="font-weight:700; color:#c9700e; margin-bottom:10px; font-size:14px;">⚠️ Incomplete Items</div>
-      <div id="incompleteList" style="font-size:13px; color:#333; line-height:1.8;"></div>
-    </div>
-
     <div class="submit-wrap">
       <button id="submitBtn" disabled onclick="submitAssessment()">Submit Assessment</button>
-      <div class="submit-note">Submit is enabled once your details, all 33 questions, and evidence for each question are complete.</div>
-      <button id="debugBtn" style="background:#6c757d; color:#fff; border:none; padding:8px 16px; border-radius:4px; font-size:12px; cursor:pointer; margin-top:8px;">🔍 Show What's Missing</button>
+      <div class="submit-note">Submit is enabled once your details and all 33 questions have complete evidence.</div>
+      <div class="pending-panel" id="pendingPanel">
+        <div class="pending-title">Pending Items to Complete:</div>
+        <div class="pending-list" id="pendingList"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -412,39 +415,44 @@ function buildAccordion(){
         <div class="scale-row" id="scale_${ci}_${qi}">
           ${[1,2,3,4,5].map(n=>`<div class="scale-btn" data-score="${n}" onclick="selectScore(${ci},${qi},${n})">${n}</div>`).join('')}
         </div>
-        <div style="background:#f5f7fb; padding:10px; border-radius:6px; border-left:3px solid var(--gold); margin-top:8px;">
-          <div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:8px; display:flex; justify-content:space-between;">
-            📋 Evidence
-            <span id="evcount_${ci}_${qi}" style="background:var(--gold); color:var(--navy); padding:2px 8px; border-radius:6px; font-size:11px; font-weight:700;">0</span>
-          </div>
-          <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
-            <input type="checkbox" id="noev_${ci}_${qi}" onchange="toggleNoEvidence(${ci},${qi})" style="cursor:pointer; width:16px; height:16px;">
-            <label for="noev_${ci}_${qi}" style="cursor:pointer; margin:0; font-size:13px; color:var(--text);">No evidence available</label>
-          </div>
-          <div id="evform_${ci}_${qi}" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
-            <div style="display:flex; flex-direction:column;">
-              <label style="font-size:11px; font-weight:700; color:var(--navy); margin-bottom:4px;">Category</label>
-              <select id="category_${ci}_${qi}" onchange="updateReliabilityOptions(${ci},${qi})" style="padding:6px 8px; border:1px solid #d9dce3; border-radius:3px; font-size:12px; background:#fff;">
+        <div class="evidence-section">
+          <div class="evidence-header">Evidence <span class="evidence-badge incomplete" id="evbadge_${ci}_${qi}">Pending</span></div>
+          <div class="evidence-row">
+            <div class="evidence-col">
+              <label>Category</label>
+              <select id="category_${ci}_${qi}" onchange="updateLevel2(${ci},${qi}); updateReliability(${ci},${qi}); checkSubmit();">
                 <option value="">Select Category</option>
                 <option value="formal_doc">Formal Document (SOP/Policy/Plan)</option>
                 <option value="live_system">Live System/Dashboard (Real-time Data)</option>
                 <option value="audit_report">Audit/Assessment Report (External Verification)</option>
                 <option value="system_export">System Export (ERP/HRMS/MES Data)</option>
                 <option value="certification">Certification/Compliance (ISO/External Standard)</option>
+                <option value="regulatory">Regulatory Compliance Filings</option>
+                <option value="no_evidence">No evidence Available</option>
               </select>
             </div>
-            <div style="display:flex; flex-direction:column;">
-              <label style="font-size:11px; font-weight:700; color:var(--navy); margin-bottom:4px;">Evidence Strength</label>
-              <select id="reliability_${ci}_${qi}" style="padding:6px 8px; border:1px solid #d9dce3; border-radius:3px; font-size:12px; background:#fff;">
-                <option value="">Select Category First</option>
+            <div class="evidence-col" id="level2_${ci}_${qi}" style="display:none;">
+              <label>Compliance Type</label>
+              <select id="level2_select_${ci}_${qi}" onchange="checkSubmit();">
+                <option value="">Select Type</option>
+                <option value="1. Statutory Filings & Returns">1. Statutory Filings & Returns</option>
+                <option value="2. Financial & Tax Compliance">2. Financial & Tax Compliance</option>
+                <option value="3. Regulatory Disclosures">3. Regulatory Disclosures</option>
+                <option value="4. Licences, Permits & Certifications">4. Licences, Permits & Certifications</option>
+                <option value="5. Compliance Monitoring & Governance">5. Compliance Monitoring & Governance</option>
               </select>
             </div>
           </div>
-          <textarea id="notes_${ci}_${qi}" placeholder="What did you see? e.g., Vision Statement approved by CEO, July 10" style="width:100%; padding:8px 10px; border:1px solid #d9dce3; border-radius:3px; font-size:12px; font-family:inherit; resize:vertical; min-height:45px; display:none;"></textarea>
-          <div id="evbtn_${ci}_${qi}" style="text-align:right; display:none;">
-            <button onclick="addEvidence(${ci},${qi})" style="background:var(--gold); color:var(--navy); padding:6px 12px; border:none; border-radius:3px; font-size:12px; font-weight:700; cursor:pointer; margin-top:6px;">+ Add Evidence</button>
+          <div class="evidence-row single" id="strength_${ci}_${qi}">
+            <div class="evidence-col">
+              <label>Evidence Strength</label>
+              <select id="reliability_${ci}_${qi}" onchange="checkSubmit();">
+                <option value="">Select Strength</option>
+                <option value="available">Available</option>
+                <option value="not_available">Not Available</option>
+              </select>
+            </div>
           </div>
-          <ul id="evlist_${ci}_${qi}" style="list-style:none; margin:8px 0 0; padding:0;"></ul>
         </div>
       `;
       body.appendChild(qBlock);
@@ -456,156 +464,62 @@ function buildAccordion(){
   });
 }
 
+const CATEGORY_LABELS = {
+  formal_doc: "Formal Document (SOP/Policy/Plan)",
+  live_system: "Live System/Dashboard (Real-time Data)",
+  audit_report: "Audit/Assessment Report (External Verification)",
+  system_export: "System Export (ERP/HRMS/MES Data)",
+  certification: "Certification/Compliance (ISO/External Standard)",
+  regulatory: "Regulatory Compliance Filings",
+  no_evidence: "No evidence Available"
+};
+const STRENGTH_LABELS = { available: "Available", not_available: "Not Available" };
+
 function selectScore(ci, qi, score){
   const key = `${ci}_${qi}`;
-  answers[key] = answers[key] || {score:0, evidenceItems:[], noEvidence:false};
+  answers[key] = answers[key] || {};
   answers[key].score = score;
   const scaleDiv = document.getElementById(`scale_${ci}_${qi}`);
   [...scaleDiv.children].forEach(btn=>{
     btn.classList.toggle('selected', parseInt(btn.dataset.score)===score);
   });
   updateProgress();
+  checkSubmit();
 }
 
-const reliabilityScales = {
-  formal_doc: [
-    {value: '1', label: '1 - Informal/Draft (Not approved)'},
-    {value: '2', label: '2 - Internal Document (Informally circulated)'},
-    {value: '3', label: '3 - Formal Document (Approved, documented)'},
-    {value: '4', label: '4 - Document with Approvals (Signed-off by leadership)'},
-    {value: '5', label: '5 - Audited Document (Third-party verified)'}
-  ],
-  live_system: [
-    {value: '1', label: '1 - Manual Screenshot (Static, point-in-time)'},
-    {value: '2', label: '2 - System Report (Generated manually, last run unclear)'},
-    {value: '3', label: '3 - Live Dashboard (Current data, real-time access)'},
-    {value: '4', label: '4 - Live Dashboard with History (Tracked 30+ days)'},
-    {value: '5', label: '5 - Audited Live System (Real-time with audit trail)'}
-  ],
-  audit_report: [
-    {value: '1', label: '1 - Internal Observation (Informal notes)'},
-    {value: '2', label: '2 - Internal Audit (Limited scope)'},
-    {value: '3', label: '3 - Formal Internal Audit (Full scope documented)'},
-    {value: '4', label: '4 - External Audit (Third-party assessment)'},
-    {value: '5', label: '5 - Certified Audit (ISO/Compliance verified)'}
-  ],
-  system_export: [
-    {value: '1', label: '1 - Manual Data Pull (No validation)'},
-    {value: '2', label: '2 - System Report (Standard, unverified)'},
-    {value: '3', label: '3 - System Export (Validated, documented)'},
-    {value: '4', label: '4 - System with Reconciliation (Cross-checked data)'},
-    {value: '5', label: '5 - Audited System Export (Certified accurate)'}
-  ],
-  certification: [
-    {value: '1', label: '1 - Self-Assessment (Internal claim)'},
-    {value: '2', label: '2 - Internal Certification (Self-verified)'},
-    {value: '3', label: '3 - Formal Internal Certification (Documented process)'},
-    {value: '4', label: '4 - Preliminary External Certification (Draft stage)'},
-    {value: '5', label: '5 - Certified & Active (Third-party verified, current)'}
-  ]
-};
-
-function updateReliabilityOptions(ci, qi){
+function updateLevel2(ci, qi){
   const category = document.getElementById(`category_${ci}_${qi}`).value;
+  const level2Div = document.getElementById(`level2_${ci}_${qi}`);
+  const level2Select = document.getElementById(`level2_select_${ci}_${qi}`);
+  if(category === 'regulatory'){
+    level2Div.style.display = 'flex';
+  } else {
+    level2Div.style.display = 'none';
+    level2Select.value = '';
+  }
+}
+
+function updateReliability(ci, qi){
+  const category = document.getElementById(`category_${ci}_${qi}`).value;
+  const strengthRow = document.getElementById(`strength_${ci}_${qi}`);
   const reliabilitySelect = document.getElementById(`reliability_${ci}_${qi}`);
-  
-  reliabilitySelect.innerHTML = '<option value="">Select Evidence Strength</option>';
-  
-  if(category && reliabilityScales[category]){
-    reliabilityScales[category].forEach(option=>{
-      const opt = document.createElement('option');
-      opt.value = option.value;
-      opt.textContent = option.label;
-      reliabilitySelect.appendChild(opt);
-    });
+  if(category === 'no_evidence'){
+    strengthRow.style.display = 'none';
+    reliabilitySelect.value = '';
+  } else {
+    strengthRow.style.display = 'grid';
   }
 }
 
-function toggleNoEvidence(ci, qi){
-  const key = `${ci}_${qi}`;
-  answers[key] = answers[key] || {score:0, evidenceItems:[], noEvidence:false};
-  const isChecked = document.getElementById(`noev_${ci}_${qi}`).checked;
-  answers[key].noEvidence = isChecked;
-  document.getElementById(`evform_${ci}_${qi}`).style.display = isChecked ? 'none' : 'grid';
-  document.getElementById(`notes_${ci}_${qi}`).style.display = isChecked ? 'none' : 'block';
-  document.getElementById(`evbtn_${ci}_${qi}`).style.display = isChecked ? 'none' : 'block';
-  showIncompleteItems();
-  checkFormComplete();
-}
-
-function addEvidence(ci, qi){
-  const key = `${ci}_${qi}`;
+function isQuestionComplete(ci, qi){
+  const score = document.querySelector(`#scale_${ci}_${qi} .scale-btn.selected`);
   const category = document.getElementById(`category_${ci}_${qi}`).value;
+  const level2 = document.getElementById(`level2_select_${ci}_${qi}`).value;
   const reliability = document.getElementById(`reliability_${ci}_${qi}`).value;
-  const notes = document.getElementById(`notes_${ci}_${qi}`).value.trim();
-  
-  if(!category || !reliability || !notes){
-    alert('Please fill all evidence fields');
-    return;
-  }
-  
-  answers[key] = answers[key] || {score:0, evidenceItems:[], noEvidence:false};
-  answers[key].evidenceItems.push({category, reliability, notes});
-  
-  renderEvidenceList(ci, qi);
-  
-  document.getElementById(`category_${ci}_${qi}`).value = '';
-  document.getElementById(`reliability_${ci}_${qi}`).value = '';
-  document.getElementById(`notes_${ci}_${qi}`).value = '';
-}
-
-function getCategoryLabel(cat){
-  const labels = {
-    'formal_doc': 'Document',
-    'live_system': 'Dashboard',
-    'audit_report': 'Audit',
-    'system_export': 'System',
-    'certification': 'Certification'
-  };
-  return labels[cat] || cat;
-}
-
-function getReliabilityLabel(cat, rel){
-  if(reliabilityScales[cat]){
-    const found = reliabilityScales[cat].find(r => r.value === rel);
-    return found ? found.label : `Level ${rel}`;
-  }
-  return `Level ${rel}`;
-}
-
-function renderEvidenceList(ci, qi){
-  const key = `${ci}_${qi}`;
-  const list = document.getElementById(`evlist_${ci}_${qi}`);
-  const items = answers[key]?.evidenceItems || [];
-  
-  list.innerHTML = items.map((item, idx)=>`
-    <li style="background:#fff; padding:8px; margin-bottom:6px; border-radius:3px; border-left:2px solid var(--gold); font-size:11px; display:flex; justify-content:space-between; align-items:flex-start; gap:6px;">
-      <div style="flex-grow:1;">
-        <div style="font-weight:700; color:var(--navy); margin-bottom:2px;">${getCategoryLabel(item.category)}</div>
-        <div style="font-size:10px; color:#666; line-height:1.3; margin-bottom:3px;">${item.notes}</div>
-        <div style="font-size:10px; color:#888; font-weight:600;">${getReliabilityLabel(item.category, item.reliability)}</div>
-      </div>
-      <button onclick="removeEvidence(${ci},${qi},${idx})" style="background:#ef4444; color:#fff; border:none; border-radius:2px; padding:3px 6px; font-size:9px; font-weight:700; cursor:pointer; white-space:nowrap;">Remove</button>
-    </li>
-  `).join('');
-  
-  updateEvidenceCounter(ci, qi);
-  showIncompleteItems();
-  checkFormComplete();
-}
-
-function removeEvidence(ci, qi, idx){
-  const key = `${ci}_${qi}`;
-  if(answers[key]) answers[key].evidenceItems.splice(idx, 1);
-  renderEvidenceList(ci, qi);
-  showIncompleteItems();
-  checkFormComplete();
-}
-
-function updateEvidenceCounter(ci, qi){
-  const key = `${ci}_${qi}`;
-  const count = answers[key]?.evidenceItems.length || 0;
-  document.getElementById(`evcount_${ci}_${qi}`).textContent = count;
+  if(!score || !category) return false;
+  if(category === 'regulatory') return !!level2 && !!reliability;
+  if(category === 'no_evidence') return true;
+  return !!reliability;
 }
 
 function updateProgress(){
@@ -613,126 +527,75 @@ function updateProgress(){
   capabilities.forEach((cap, ci)=>{
     let capAnswered = 0;
     cap.questions.forEach((q, qi)=>{
-      if(answers[`${ci}_${qi}`] && answers[`${ci}_${qi}`].score){ answered++; capAnswered++; }
+      if(document.querySelector(`#scale_${ci}_${qi} .scale-btn.selected`)){ answered++; capAnswered++; }
     });
     const counter = document.getElementById(`counter_${ci}`);
     if(counter) counter.innerText = `${capAnswered} of ${cap.questions.length} answered`;
   });
-  totalQuestions = 0;
-  capabilities.forEach(c => totalQuestions += c.questions.length);
   const pct = Math.round((answered/totalQuestions)*100);
   document.getElementById('progressFill').style.width = pct + '%';
   document.getElementById('progressLabel').innerText = `${answered} of ${totalQuestions} questions answered`;
-  checkFormComplete();
 }
 
-function showIncompleteItems(){
-  const requiredFields = [
-    {id: 'f_company', label: 'Company Name'},
-    {id: 'f_name', label: 'Your Name'},
-    {id: 'f_email', label: 'Email'},
-    {id: 'f_role', label: 'Role / Designation'},
-    {id: 'f_department', label: 'Department'},
-    {id: 'f_industry', label: 'Type of Industry'},
-    {id: 'f_revenue', label: 'Annual Revenue'}
-  ];
-  
-  const incompleteItems = [];
-  
-  // Check required fields
-  requiredFields.forEach(field => {
-    if(document.getElementById(field.id).value.trim() === ''){
-      incompleteItems.push(`📝 <strong>${field.label}</strong> — Required field is empty`);
+function checkSubmit(){
+  const fields = ['f_company','f_name','f_email','f_role','f_department','f_industry','f_revenue'];
+  const fieldLabels = {f_company:'Company Name', f_name:'Your Name', f_email:'Email', f_role:'Role / Designation', f_department:'Department', f_industry:'Type of Industry', f_revenue:'Annual Revenue'};
+  const missingFields = fields.filter(id => document.getElementById(id).value.trim() === '');
+  const fieldsOk = missingFields.length === 0;
+
+  let totalPendingQuestions = 0;
+  const pendingByCapability = {};
+
+  capabilities.forEach((cap, ci)=> cap.questions.forEach((q, qi)=>{
+    const key = `${ci}_${qi}`;
+    const complete = isQuestionComplete(ci, qi);
+    const badge = document.getElementById(`evbadge_${ci}_${qi}`);
+    if(badge){
+      badge.textContent = complete ? 'Complete' : 'Pending';
+      badge.classList.toggle('incomplete', !complete);
     }
-  });
-  
-  // Check evidence for each question
-  const missingEvidenceQuestions = [];
-  capabilities.forEach((cap, ci)=> {
-    cap.questions.forEach((q, qi)=>{
-      const ans = answers[`${ci}_${qi}`];
-      if(ans && ans.score){
-        if(!(ans.noEvidence === true || (ans.evidenceItems && ans.evidenceItems.length > 0))){
-          missingEvidenceQuestions.push(`${cap.code}-Q${qi+1} (${cap.name})`);
-        }
-      }
-    });
-  });
-  
-  if(missingEvidenceQuestions.length > 0){
-    incompleteItems.push(`📋 <strong>${missingEvidenceQuestions.length} Question(s) Missing Evidence:</strong><br><div style="margin-left:16px; margin-top:6px;">${missingEvidenceQuestions.map(q=>`• ${q}`).join('<br>')}</div>`);
-  }
-  
-  const incompleteCard = document.getElementById('incompleteCard');
-  const incompleteList = document.getElementById('incompleteList');
-  
-  if(incompleteItems.length > 0){
-    incompleteCard.style.display = 'block';
-    incompleteList.innerHTML = incompleteItems.join('<br>');
+    if(!complete){
+      totalPendingQuestions++;
+      if(!pendingByCapability[cap.code]) pendingByCapability[cap.code] = { name: cap.name, questions: [] };
+      pendingByCapability[cap.code].questions.push(qi + 1);
+    }
+  }));
+
+  updateProgress();
+
+  const pendingPanel = document.getElementById('pendingPanel');
+  const pendingList = document.getElementById('pendingList');
+  const allComplete = totalPendingQuestions === 0;
+
+  if(fieldsOk && allComplete){
+    pendingPanel.style.display = 'none';
   } else {
-    incompleteCard.style.display = 'none';
-  }
-}
-
-function checkFormComplete(){
-  const requiredFields = ['f_company','f_name','f_email','f_role','f_department','f_industry','f_revenue'];
-  const fieldsOk = requiredFields.every(id => document.getElementById(id).value.trim() !== '');
-  let answered = 0;
-  let evidenceComplete = 0;
-  
-  capabilities.forEach((cap, ci)=> cap.questions.forEach((q, qi)=>{
-    const ans = answers[`${ci}_${qi}`];
-    if(ans && ans.score) answered++;
-    
-    // Evidence is complete if: "No evidence available" is checked OR at least 1 evidence item added
-    if(ans && (ans.noEvidence === true || (ans.evidenceItems && ans.evidenceItems.length > 0))){
-      evidenceComplete++;
+    pendingPanel.style.display = 'block';
+    let html = '';
+    if(missingFields.length > 0){
+      html += '<div style="margin-bottom:10px;"><strong>Your Details missing:</strong> ' + missingFields.map(f=>fieldLabels[f]).join(', ') + '</div>';
     }
-  }));
-  
-  const allAnswered = answered === totalQuestions;
-  const allEvidenceProvided = evidenceComplete === totalQuestions;
-  
-  document.getElementById('submitBtn').disabled = !(fieldsOk && allAnswered && allEvidenceProvided);
-  
-  // Show incomplete items
-  showIncompleteItems();
+    if(totalPendingQuestions > 0){
+      html += '<div><strong>Questions pending:</strong> ' + totalPendingQuestions + ' of ' + totalQuestions + '</div>';
+      html += '<div style="margin-top:6px; font-size:12px;">';
+      Object.keys(pendingByCapability).forEach(code=>{
+        const cap = pendingByCapability[code];
+        html += '<div style="margin-top:4px;">&bull; <strong>' + code + '</strong> ' + cap.name + ' &mdash; Q' + cap.questions.join(', Q') + '</div>';
+      });
+      html += '</div>';
+    }
+    pendingList.innerHTML = html;
+  }
+
+  document.getElementById('submitBtn').disabled = !(fieldsOk && allComplete);
 }
-
-['f_company','f_name','f_email','f_role','f_department','f_industry','f_revenue'].forEach(id=>{
-  document.getElementById(id).addEventListener('input', checkFormComplete);
-  document.getElementById(id).addEventListener('change', checkFormComplete);
-});
-
-// Debug button
-document.getElementById('debugBtn').addEventListener('click', function(){
-  showIncompleteItems();
-  document.getElementById('incompleteCard').style.display = 'block';
-  setTimeout(()=>{
-    document.getElementById('incompleteCard').scrollIntoView({behavior:'smooth', block:'center'});
-  }, 100);
-  
-  // Also log to console for debugging
-  const requiredFields = ['f_company','f_name','f_email','f_role','f_department','f_industry','f_revenue'];
-  console.log('=== FORM DEBUG INFO ===');
-  requiredFields.forEach(id => {
-    const val = document.getElementById(id).value;
-    console.log(`${id}: "${val}" ${val.trim() === '' ? '❌ EMPTY' : '✓'}`);
-  });
-  
-  let answered = 0, hasEvidence = 0;
-  capabilities.forEach((cap, ci)=> cap.questions.forEach((q, qi)=>{
-    const ans = answers[`${ci}_${qi}`];
-    if(ans && ans.score) answered++;
-    if(ans && (ans.noEvidence === true || (ans.evidenceItems && ans.evidenceItems.length > 0))) hasEvidence++;
-  }));
-  console.log(`Questions answered: ${answered}/33`);
-  console.log(`Questions with evidence: ${hasEvidence}/33`);
-  console.log(`Submit enabled: ${!document.getElementById('submitBtn').disabled}`);
-});
 
 buildAccordion();
-checkFormComplete(); // Initial check when page loads
+['f_company','f_name','f_email','f_role','f_department','f_industry','f_revenue'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', checkSubmit);
+  document.getElementById(id).addEventListener('change', checkSubmit);
+});
+checkSubmit();
 
 // ---------------- Scoring & report generation ----------------
 function computeScores(){
@@ -753,10 +616,27 @@ function bandFor(score){
   return { band:'Best in Class', text:'This dimension is a genuine strength and can be leveraged as a competitive advantage.' };
 }
 
+function computeEvidenceStats(){
+  let available = 0, notAvailable = 0;
+  capabilities.forEach((cap, ci)=> cap.questions.forEach((q, qi)=>{
+    const category = document.getElementById(`category_${ci}_${qi}`).value;
+    const reliability = document.getElementById(`reliability_${ci}_${qi}`).value;
+    if(category === 'no_evidence' || reliability === 'not_available') notAvailable++;
+    else if(reliability === 'available') available++;
+  }));
+  const total = available + notAvailable;
+  return {
+    available, notAvailable, total,
+    availablePct: total ? Math.round((available/total)*100) : 0,
+    notAvailablePct: total ? Math.round((notAvailable/total)*100) : 0
+  };
+}
+
 async function buildReportImages(capScores, overall, revenue){
   const el = document.getElementById('reportCapture');
   const b = bandFor(overall);
   const riskAmount = revenue ? (revenue * 0.10 * (1 - overall/5)) : null;
+  const evStats = computeEvidenceStats();
 
   el.innerHTML = `
     <div style="font-family:Segoe UI, Arial, sans-serif; color:#222;">
@@ -775,6 +655,17 @@ async function buildReportImages(capScores, overall, revenue){
         <div style="font-weight:700; color:#1B2A4A; font-size:14px;">Estimated Revenue at Risk: Rs. ${riskAmount.toFixed(2)} Crore</div>
         <div style="font-size:11.5px; color:#666; font-style:italic; margin-top:6px;">This is a benchmark-based directional estimate, not a measured loss. It is intended to show the relative scale of opportunity tied to leadership and governance gaps, not a precise, audited number.</div>
       </div>` : ''}
+      <div style="margin:20px 0;">
+        <div style="font-weight:700; color:#1B2A4A; margin-bottom:8px; text-align:center;">Evidence Quality Summary</div>
+        <div style="display:flex; align-items:center; justify-content:center; gap:30px;">
+          <canvas id="evidenceCanvas" width="240" height="240"></canvas>
+          <div style="font-size:13px; color:#333; line-height:2;">
+            <div><span style="display:inline-block; width:12px; height:12px; background:#1B2A4A; border-radius:2px; margin-right:8px;"></span>Evidence Available: <b>${evStats.available}</b> (${evStats.availablePct}%)</div>
+            <div><span style="display:inline-block; width:12px; height:12px; background:#C9A84C; border-radius:2px; margin-right:8px;"></span>Evidence Not Available: <b>${evStats.notAvailable}</b> (${evStats.notAvailablePct}%)</div>
+            <div style="color:#888; font-size:11.5px; margin-top:4px;">Based on ${evStats.total} of ${totalQuestions} questions</div>
+          </div>
+        </div>
+      </div>
       <div style="margin:20px 0;">
         <div style="font-weight:700; color:#1B2A4A; margin-bottom:8px;">Capability Scorecard</div>
         <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
@@ -816,6 +707,19 @@ async function buildReportImages(capScores, overall, revenue){
   });
   chart.resize();
   chart.update('none');
+
+  const evCtx = document.getElementById('evidenceCanvas').getContext('2d');
+  const evChart = new Chart(evCtx, {
+    type: 'pie',
+    data: {
+      labels: ['Evidence Available', 'Evidence Not Available'],
+      datasets: [{ data: [evStats.available, evStats.notAvailable], backgroundColor: ['#1B2A4A', '#C9A84C'] }]
+    },
+    options: { animation:false, responsive:false, plugins:{ legend:{ display:false } } }
+  });
+  evChart.resize();
+  evChart.update('none');
+
   await new Promise(r=>setTimeout(r,300));
   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
 
@@ -895,94 +799,21 @@ function buildAnswerSheetPdf(details, capScores){
       pdf.setFont(undefined,'bold');
       pdf.text(`Score: ${ans.score}`, margin, y); y+=lineHeight;
       pdf.setFont(undefined,'italic');
-      if(ans.noEvidence){
-        const evLines = pdf.splitTextToSize('Evidence: No evidence available (by choice).', 515);
-        if(y + evLines.length*lineHeight > pageHeight - 40){ pdf.addPage(); y = margin; }
-        pdf.text(evLines, margin, y); y += evLines.length*lineHeight + 8;
-      } else if(ans.evidenceItems && ans.evidenceItems.length > 0){
-        ans.evidenceItems.forEach((ev, evi)=>{
-          const catLabel = getCategoryLabel(ev.category);
-          const relLabel = getReliabilityLabel(ev.category, ev.reliability);
-          const evText = `Evidence ${evi+1}: [${catLabel}] ${relLabel} - ${ev.notes}`;
-          const evLines = pdf.splitTextToSize(evText, 515);
-          if(y + evLines.length*lineHeight > pageHeight - 40){ pdf.addPage(); y = margin; }
-          pdf.text(evLines, margin, y); y += evLines.length*lineHeight;
-        });
-        y += 4;
-      } else {
-        const evLines = pdf.splitTextToSize('Evidence: No evidence note provided.', 515);
-        if(y + evLines.length*lineHeight > pageHeight - 40){ pdf.addPage(); y = margin; }
-        pdf.text(evLines, margin, y); y += evLines.length*lineHeight + 8;
-      }
+      const category = document.getElementById(`category_${ci}_${qi}`).value;
+      const level2 = document.getElementById(`level2_select_${ci}_${qi}`).value;
+      const reliability = document.getElementById(`reliability_${ci}_${qi}`).value;
+      let evText = 'Evidence: ' + (CATEGORY_LABELS[category] || 'Not specified');
+      if(category === 'regulatory' && level2) evText += ' \u2014 ' + level2;
+      if(category !== 'no_evidence' && reliability) evText += ' \u2014 Strength: ' + STRENGTH_LABELS[reliability];
+      const evLines = pdf.splitTextToSize(evText, 515);
+      if(y + evLines.length*lineHeight > pageHeight - 40){ pdf.addPage(); y = margin; }
+      pdf.text(evLines, margin, y); y += evLines.length*lineHeight + 8;
       pdf.setFont(undefined,'normal');
     });
     y += 8;
   });
 
   return pdf.output('datauristring').split(',')[1];
-}
-
-// ---- EVIDENCE COMPILATION ----
-function compileEvidenceStats(){
-  let totalEvidence = 0;
-  let totalReliability = 0;
-  let evidenceByCategory = {formal_doc:0, live_system:0, audit_report:0, system_export:0, certification:0};
-  let evidenceByStrength = {1:0, 2:0, 3:0, 4:0, 5:0};
-  let questionEvidenceDetails = [];
-  let weakEvidenceQuestions = [];
-  let strongEvidenceQuestions = [];
-
-  capabilities.forEach((cap, ci)=>{
-    cap.questions.forEach((q, qi)=>{
-      const ans = answers[`${ci}_${qi}`];
-      const qKey = `${cap.code}-Q${qi+1}`;
-      
-      if(ans.noEvidence){
-        questionEvidenceDetails.push({
-          question: qKey,
-          capability: cap.name,
-          score: ans.score,
-          evidenceCount: 0,
-          isNoEvidence: true
-        });
-      } else if(ans.evidenceItems && ans.evidenceItems.length > 0){
-        const qEvidence = ans.evidenceItems;
-        const avgReliability = qEvidence.reduce((sum,e)=>sum+parseInt(e.reliability),0) / qEvidence.length;
-        
-        qEvidence.forEach(ev=>{
-          totalEvidence++;
-          totalReliability += parseInt(ev.reliability);
-          evidenceByCategory[ev.category]++;
-          evidenceByStrength[ev.reliability]++;
-        });
-        
-        questionEvidenceDetails.push({
-          question: qKey,
-          capability: cap.name,
-          score: ans.score,
-          evidenceCount: qEvidence.length,
-          avgReliability: avgReliability.toFixed(1),
-          isNoEvidence: false
-        });
-        
-        if(avgReliability >= 4) strongEvidenceQuestions.push(qKey);
-        if(avgReliability < 3) weakEvidenceQuestions.push(qKey);
-      }
-    });
-  });
-
-  const avgReliability = totalEvidence > 0 ? (totalReliability / totalEvidence).toFixed(2) : 'N/A';
-
-  return {
-    totalEvidenceItems: totalEvidence,
-    averageReliability: avgReliability,
-    evidenceByCategory,
-    evidenceByStrength,
-    questionEvidenceDetails,
-    weakEvidenceQuestions,
-    strongEvidenceQuestions,
-    questionsWithNoEvidence: questionEvidenceDetails.filter(q=>q.isNoEvidence).length
-  };
 }
 
 async function submitAssessment(){
@@ -1001,8 +832,7 @@ async function submitAssessment(){
 
   const { capScores, overall } = computeScores();
   details.overall = overall;
-  
-  const evidenceStats = compileEvidenceStats();
+  const evidenceStats = computeEvidenceStats();
 
   const overviewJpeg = await buildReportImages(capScores, overall, details.revenue);
   const overviewPdfBase64 = await buildOverviewPdf(overviewJpeg);
