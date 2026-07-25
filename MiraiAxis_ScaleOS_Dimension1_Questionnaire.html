@@ -248,7 +248,7 @@ body{
 
     <div class="submit-wrap">
       <button id="submitBtn" disabled onclick="submitAssessment()">Submit Assessment</button>
-      <div class="submit-note">Submit is enabled once your details and all 33 questions are complete.</div>
+      <div class="submit-note">Submit is enabled once your details, all 33 questions, and evidence for each question are complete.</div>
     </div>
   </div>
 </div>
@@ -405,8 +405,40 @@ function buildAccordion(){
         <div class="scale-row" id="scale_${ci}_${qi}">
           ${[1,2,3,4,5].map(n=>`<div class="scale-btn" data-score="${n}" onclick="selectScore(${ci},${qi},${n})">${n}</div>`).join('')}
         </div>
-        <div class="evidence-label">EVIDENCE NOTES (what exists | how it works | who confirmed | date verified)</div>
-        <textarea class="evidence-textarea" placeholder="Describe specific evidence: name the document, system, or person that confirms this score..." oninput="updateEvidence(${ci},${qi},this.value)"></textarea>
+        <div style="background:#f5f7fb; padding:10px; border-radius:6px; border-left:3px solid var(--gold); margin-top:8px;">
+          <div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:8px; display:flex; justify-content:space-between;">
+            📋 Evidence
+            <span id="evcount_${ci}_${qi}" style="background:var(--gold); color:var(--navy); padding:2px 8px; border-radius:6px; font-size:11px; font-weight:700;">0</span>
+          </div>
+          <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
+            <input type="checkbox" id="noev_${ci}_${qi}" onchange="toggleNoEvidence(${ci},${qi})" style="cursor:pointer; width:16px; height:16px;">
+            <label for="noev_${ci}_${qi}" style="cursor:pointer; margin:0; font-size:13px; color:var(--text);">No evidence available</label>
+          </div>
+          <div id="evform_${ci}_${qi}" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+            <div style="display:flex; flex-direction:column;">
+              <label style="font-size:11px; font-weight:700; color:var(--navy); margin-bottom:4px;">Category</label>
+              <select id="category_${ci}_${qi}" onchange="updateReliabilityOptions(${ci},${qi})" style="padding:6px 8px; border:1px solid #d9dce3; border-radius:3px; font-size:12px; background:#fff;">
+                <option value="">Select Category</option>
+                <option value="formal_doc">Formal Document (SOP/Policy/Plan)</option>
+                <option value="live_system">Live System/Dashboard (Real-time Data)</option>
+                <option value="audit_report">Audit/Assessment Report (External Verification)</option>
+                <option value="system_export">System Export (ERP/HRMS/MES Data)</option>
+                <option value="certification">Certification/Compliance (ISO/External Standard)</option>
+              </select>
+            </div>
+            <div style="display:flex; flex-direction:column;">
+              <label style="font-size:11px; font-weight:700; color:var(--navy); margin-bottom:4px;">Evidence Strength</label>
+              <select id="reliability_${ci}_${qi}" style="padding:6px 8px; border:1px solid #d9dce3; border-radius:3px; font-size:12px; background:#fff;">
+                <option value="">Select Category First</option>
+              </select>
+            </div>
+          </div>
+          <textarea id="notes_${ci}_${qi}" placeholder="What did you see? e.g., Vision Statement approved by CEO, July 10" style="width:100%; padding:8px 10px; border:1px solid #d9dce3; border-radius:3px; font-size:12px; font-family:inherit; resize:vertical; min-height:45px; display:none;"></textarea>
+          <div id="evbtn_${ci}_${qi}" style="text-align:right; display:none;">
+            <button onclick="addEvidence(${ci},${qi})" style="background:var(--gold); color:var(--navy); padding:6px 12px; border:none; border-radius:3px; font-size:12px; font-weight:700; cursor:pointer; margin-top:6px;">+ Add Evidence</button>
+          </div>
+          <ul id="evlist_${ci}_${qi}" style="list-style:none; margin:8px 0 0; padding:0;"></ul>
+        </div>
       `;
       body.appendChild(qBlock);
     });
@@ -419,7 +451,7 @@ function buildAccordion(){
 
 function selectScore(ci, qi, score){
   const key = `${ci}_${qi}`;
-  answers[key] = answers[key] || {};
+  answers[key] = answers[key] || {score:0, evidenceItems:[], noEvidence:false};
   answers[key].score = score;
   const scaleDiv = document.getElementById(`scale_${ci}_${qi}`);
   [...scaleDiv.children].forEach(btn=>{
@@ -428,10 +460,141 @@ function selectScore(ci, qi, score){
   updateProgress();
 }
 
-function updateEvidence(ci, qi, val){
+const reliabilityScales = {
+  formal_doc: [
+    {value: '1', label: '1 - Informal/Draft (Not approved)'},
+    {value: '2', label: '2 - Internal Document (Informally circulated)'},
+    {value: '3', label: '3 - Formal Document (Approved, documented)'},
+    {value: '4', label: '4 - Document with Approvals (Signed-off by leadership)'},
+    {value: '5', label: '5 - Audited Document (Third-party verified)'}
+  ],
+  live_system: [
+    {value: '1', label: '1 - Manual Screenshot (Static, point-in-time)'},
+    {value: '2', label: '2 - System Report (Generated manually, last run unclear)'},
+    {value: '3', label: '3 - Live Dashboard (Current data, real-time access)'},
+    {value: '4', label: '4 - Live Dashboard with History (Tracked 30+ days)'},
+    {value: '5', label: '5 - Audited Live System (Real-time with audit trail)'}
+  ],
+  audit_report: [
+    {value: '1', label: '1 - Internal Observation (Informal notes)'},
+    {value: '2', label: '2 - Internal Audit (Limited scope)'},
+    {value: '3', label: '3 - Formal Internal Audit (Full scope documented)'},
+    {value: '4', label: '4 - External Audit (Third-party assessment)'},
+    {value: '5', label: '5 - Certified Audit (ISO/Compliance verified)'}
+  ],
+  system_export: [
+    {value: '1', label: '1 - Manual Data Pull (No validation)'},
+    {value: '2', label: '2 - System Report (Standard, unverified)'},
+    {value: '3', label: '3 - System Export (Validated, documented)'},
+    {value: '4', label: '4 - System with Reconciliation (Cross-checked data)'},
+    {value: '5', label: '5 - Audited System Export (Certified accurate)'}
+  ],
+  certification: [
+    {value: '1', label: '1 - Self-Assessment (Internal claim)'},
+    {value: '2', label: '2 - Internal Certification (Self-verified)'},
+    {value: '3', label: '3 - Formal Internal Certification (Documented process)'},
+    {value: '4', label: '4 - Preliminary External Certification (Draft stage)'},
+    {value: '5', label: '5 - Certified & Active (Third-party verified, current)'}
+  ]
+};
+
+function updateReliabilityOptions(ci, qi){
+  const category = document.getElementById(`category_${ci}_${qi}`).value;
+  const reliabilitySelect = document.getElementById(`reliability_${ci}_${qi}`);
+  
+  reliabilitySelect.innerHTML = '<option value="">Select Evidence Strength</option>';
+  
+  if(category && reliabilityScales[category]){
+    reliabilityScales[category].forEach(option=>{
+      const opt = document.createElement('option');
+      opt.value = option.value;
+      opt.textContent = option.label;
+      reliabilitySelect.appendChild(opt);
+    });
+  }
+}
+
+function toggleNoEvidence(ci, qi){
   const key = `${ci}_${qi}`;
-  answers[key] = answers[key] || {};
-  answers[key].evidence = val;
+  answers[key] = answers[key] || {score:0, evidenceItems:[], noEvidence:false};
+  const isChecked = document.getElementById(`noev_${ci}_${qi}`).checked;
+  answers[key].noEvidence = isChecked;
+  document.getElementById(`evform_${ci}_${qi}`).style.display = isChecked ? 'none' : 'grid';
+  document.getElementById(`notes_${ci}_${qi}`).style.display = isChecked ? 'none' : 'block';
+  document.getElementById(`evbtn_${ci}_${qi}`).style.display = isChecked ? 'none' : 'block';
+  checkFormComplete();
+}
+
+function addEvidence(ci, qi){
+  const key = `${ci}_${qi}`;
+  const category = document.getElementById(`category_${ci}_${qi}`).value;
+  const reliability = document.getElementById(`reliability_${ci}_${qi}`).value;
+  const notes = document.getElementById(`notes_${ci}_${qi}`).value.trim();
+  
+  if(!category || !reliability || !notes){
+    alert('Please fill all evidence fields');
+    return;
+  }
+  
+  answers[key] = answers[key] || {score:0, evidenceItems:[], noEvidence:false};
+  answers[key].evidenceItems.push({category, reliability, notes});
+  
+  renderEvidenceList(ci, qi);
+  
+  document.getElementById(`category_${ci}_${qi}`).value = '';
+  document.getElementById(`reliability_${ci}_${qi}`).value = '';
+  document.getElementById(`notes_${ci}_${qi}`).value = '';
+}
+
+function getCategoryLabel(cat){
+  const labels = {
+    'formal_doc': 'Document',
+    'live_system': 'Dashboard',
+    'audit_report': 'Audit',
+    'system_export': 'System',
+    'certification': 'Certification'
+  };
+  return labels[cat] || cat;
+}
+
+function getReliabilityLabel(cat, rel){
+  if(reliabilityScales[cat]){
+    const found = reliabilityScales[cat].find(r => r.value === rel);
+    return found ? found.label : `Level ${rel}`;
+  }
+  return `Level ${rel}`;
+}
+
+function renderEvidenceList(ci, qi){
+  const key = `${ci}_${qi}`;
+  const list = document.getElementById(`evlist_${ci}_${qi}`);
+  const items = answers[key]?.evidenceItems || [];
+  
+  list.innerHTML = items.map((item, idx)=>`
+    <li style="background:#fff; padding:8px; margin-bottom:6px; border-radius:3px; border-left:2px solid var(--gold); font-size:11px; display:flex; justify-content:space-between; align-items:flex-start; gap:6px;">
+      <div style="flex-grow:1;">
+        <div style="font-weight:700; color:var(--navy); margin-bottom:2px;">${getCategoryLabel(item.category)}</div>
+        <div style="font-size:10px; color:#666; line-height:1.3; margin-bottom:3px;">${item.notes}</div>
+        <div style="font-size:10px; color:#888; font-weight:600;">${getReliabilityLabel(item.category, item.reliability)}</div>
+      </div>
+      <button onclick="removeEvidence(${ci},${qi},${idx})" style="background:#ef4444; color:#fff; border:none; border-radius:2px; padding:3px 6px; font-size:9px; font-weight:700; cursor:pointer; white-space:nowrap;">Remove</button>
+    </li>
+  `).join('');
+  
+  updateEvidenceCounter(ci, qi);
+  checkFormComplete();
+}
+
+function removeEvidence(ci, qi, idx){
+  const key = `${ci}_${qi}`;
+  if(answers[key]) answers[key].evidenceItems.splice(idx, 1);
+  renderEvidenceList(ci, qi);
+}
+
+function updateEvidenceCounter(ci, qi){
+  const key = `${ci}_${qi}`;
+  const count = answers[key]?.evidenceItems.length || 0;
+  document.getElementById(`evcount_${ci}_${qi}`).textContent = count;
 }
 
 function updateProgress(){
@@ -456,11 +619,22 @@ function checkFormComplete(){
   const requiredFields = ['f_company','f_name','f_email','f_role','f_department','f_industry','f_revenue'];
   const fieldsOk = requiredFields.every(id => document.getElementById(id).value.trim() !== '');
   let answered = 0;
+  let evidenceComplete = 0;
+  
   capabilities.forEach((cap, ci)=> cap.questions.forEach((q, qi)=>{
-    if(answers[`${ci}_${qi}`] && answers[`${ci}_${qi}`].score) answered++;
+    const ans = answers[`${ci}_${qi}`];
+    if(ans && ans.score) answered++;
+    
+    // Evidence is complete if: "No evidence available" is checked OR at least 1 evidence item added
+    if(ans && (ans.noEvidence === true || (ans.evidenceItems && ans.evidenceItems.length > 0))){
+      evidenceComplete++;
+    }
   }));
+  
   const allAnswered = answered === totalQuestions;
-  document.getElementById('submitBtn').disabled = !(fieldsOk && allAnswered);
+  const allEvidenceProvided = evidenceComplete === totalQuestions;
+  
+  document.getElementById('submitBtn').disabled = !(fieldsOk && allAnswered && allEvidenceProvided);
 }
 
 ['f_company','f_name','f_email','f_role','f_department','f_industry','f_revenue'].forEach(id=>{
@@ -631,16 +805,94 @@ function buildAnswerSheetPdf(details, capScores){
       pdf.setFont(undefined,'bold');
       pdf.text(`Score: ${ans.score}`, margin, y); y+=lineHeight;
       pdf.setFont(undefined,'italic');
-      const evText = ans.evidence && ans.evidence.trim() ? ans.evidence.trim() : 'No evidence note provided.';
-      const evLines = pdf.splitTextToSize(`Evidence: ${evText}`, 515);
-      if(y + evLines.length*lineHeight > pageHeight - 40){ pdf.addPage(); y = margin; }
-      pdf.text(evLines, margin, y); y += evLines.length*lineHeight + 8;
+      if(ans.noEvidence){
+        const evLines = pdf.splitTextToSize('Evidence: No evidence available (by choice).', 515);
+        if(y + evLines.length*lineHeight > pageHeight - 40){ pdf.addPage(); y = margin; }
+        pdf.text(evLines, margin, y); y += evLines.length*lineHeight + 8;
+      } else if(ans.evidenceItems && ans.evidenceItems.length > 0){
+        ans.evidenceItems.forEach((ev, evi)=>{
+          const catLabel = getCategoryLabel(ev.category);
+          const relLabel = getReliabilityLabel(ev.category, ev.reliability);
+          const evText = `Evidence ${evi+1}: [${catLabel}] ${relLabel} - ${ev.notes}`;
+          const evLines = pdf.splitTextToSize(evText, 515);
+          if(y + evLines.length*lineHeight > pageHeight - 40){ pdf.addPage(); y = margin; }
+          pdf.text(evLines, margin, y); y += evLines.length*lineHeight;
+        });
+        y += 4;
+      } else {
+        const evLines = pdf.splitTextToSize('Evidence: No evidence note provided.', 515);
+        if(y + evLines.length*lineHeight > pageHeight - 40){ pdf.addPage(); y = margin; }
+        pdf.text(evLines, margin, y); y += evLines.length*lineHeight + 8;
+      }
       pdf.setFont(undefined,'normal');
     });
     y += 8;
   });
 
   return pdf.output('datauristring').split(',')[1];
+}
+
+// ---- EVIDENCE COMPILATION ----
+function compileEvidenceStats(){
+  let totalEvidence = 0;
+  let totalReliability = 0;
+  let evidenceByCategory = {formal_doc:0, live_system:0, audit_report:0, system_export:0, certification:0};
+  let evidenceByStrength = {1:0, 2:0, 3:0, 4:0, 5:0};
+  let questionEvidenceDetails = [];
+  let weakEvidenceQuestions = [];
+  let strongEvidenceQuestions = [];
+
+  capabilities.forEach((cap, ci)=>{
+    cap.questions.forEach((q, qi)=>{
+      const ans = answers[`${ci}_${qi}`];
+      const qKey = `${cap.code}-Q${qi+1}`;
+      
+      if(ans.noEvidence){
+        questionEvidenceDetails.push({
+          question: qKey,
+          capability: cap.name,
+          score: ans.score,
+          evidenceCount: 0,
+          isNoEvidence: true
+        });
+      } else if(ans.evidenceItems && ans.evidenceItems.length > 0){
+        const qEvidence = ans.evidenceItems;
+        const avgReliability = qEvidence.reduce((sum,e)=>sum+parseInt(e.reliability),0) / qEvidence.length;
+        
+        qEvidence.forEach(ev=>{
+          totalEvidence++;
+          totalReliability += parseInt(ev.reliability);
+          evidenceByCategory[ev.category]++;
+          evidenceByStrength[ev.reliability]++;
+        });
+        
+        questionEvidenceDetails.push({
+          question: qKey,
+          capability: cap.name,
+          score: ans.score,
+          evidenceCount: qEvidence.length,
+          avgReliability: avgReliability.toFixed(1),
+          isNoEvidence: false
+        });
+        
+        if(avgReliability >= 4) strongEvidenceQuestions.push(qKey);
+        if(avgReliability < 3) weakEvidenceQuestions.push(qKey);
+      }
+    });
+  });
+
+  const avgReliability = totalEvidence > 0 ? (totalReliability / totalEvidence).toFixed(2) : 'N/A';
+
+  return {
+    totalEvidenceItems: totalEvidence,
+    averageReliability: avgReliability,
+    evidenceByCategory,
+    evidenceByStrength,
+    questionEvidenceDetails,
+    weakEvidenceQuestions,
+    strongEvidenceQuestions,
+    questionsWithNoEvidence: questionEvidenceDetails.filter(q=>q.isNoEvidence).length
+  };
 }
 
 async function submitAssessment(){
@@ -659,6 +911,8 @@ async function submitAssessment(){
 
   const { capScores, overall } = computeScores();
   details.overall = overall;
+  
+  const evidenceStats = compileEvidenceStats();
 
   const overviewJpeg = await buildReportImages(capScores, overall, details.revenue);
   const overviewPdfBase64 = await buildOverviewPdf(overviewJpeg);
@@ -672,6 +926,7 @@ async function submitAssessment(){
     details,
     overallScore: overall,
     capabilityScores: capScores,
+    evidenceStats,
     overviewPdfBase64,
     answerSheetPdfBase64
   };
