@@ -246,8 +246,6 @@ body{
             <option>Other</option>
           </select>
         </div>
-      </div>
-      <div class="form-grid full">
         <div class="field"><label>Annual Revenue (Rs. Crore) *</label><input type="number" id="f_revenue" required></div>
       </div>
     </div>
@@ -926,7 +924,8 @@ async function submitAssessment(){
           company: details.company,
           dimension: 'D1',
           score: overall,
-          confidencePct: evidenceStats.availablePct
+          confidencePct: evidenceStats.availablePct,
+          revenue: details.revenue
         })
       });
     }catch(err){
